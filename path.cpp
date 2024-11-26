@@ -26,7 +26,7 @@ Path::Path(int x_max, int y_max)
     m_x_max = x_max;
     m_y_max = y_max;
     steps_r_min = 2 * (m_x_max + m_y_max);
-    steps_r_max = m_x_max * m_y_max / 4;
+    steps_r_max = m_x_max * m_y_max ;
     gen.seed(rd());
     cout << "initial matrix: width= " << m_x_max << " height= " << m_y_max << endl;
 }
@@ -36,53 +36,23 @@ Path::~Path()
 
 }
 
-void Path::show_matrix(int mode)
+void Path::start(int start_x, int start_y, int end_x, int end_y)
 {
-    int i = 0, j = 0;
-    int index = 0;
-    for (i = 0;i < m_y_max;i++)
-    {
-        for (j = 0;j < m_x_max;j++)
-        {
-            if (matrix[i][j] == 0)
-            {
-                cout << " " << " ";
-            }
-            else
-            {
-                index++;
-                cout << " " << matrix[i][j];
-            }
+    set_start_end_point(start_x, start_y, end_x, end_y);
+    //set_steps_range(60, 100000);
+    set_show_gui(600, 400);
 
-        }
-        cout << endl;
-    }
-    cout << endl;
+    rand_main_path();
+    gen_matrix_wall_main_path();
+    rand_dead_path();
+
+    matrix_wall_re();
+    matrix_wall_edge_zero();
+    matrix_wall_merge_area();
+
+
+    show_gui_image(false, true, true);
 }
-
-void Path::show_matrix_wall()
-{
-    int i = 0, j = 0;
-    int index = 0;
-    for (i = 0;i < (m_y_max * 2 - 1);i++)
-    {
-        for (j = 0;j < (m_x_max * 2 - 1);j++)
-        {
-            if (matrix_wall[i][j] == 0)
-            {
-                cout << " " << "";
-            }
-            else
-            {
-                index++;
-                cout << "" << matrix_wall[i][j];
-            }
-        }
-        cout << endl;
-    }
-    cout << endl;
-}
-
 
 void Path::set_start_end_point(int start_x, int start_y, int end_x, int end_y)
 {
@@ -106,6 +76,68 @@ void Path::set_start_end_point(int start_x, int start_y, int end_x, int end_y)
     }
     cout << "set start and end  point: [ " << start_point.x << " , " << start_point.y << " ] --[ " << real_end_point.x << " , " << real_end_point.y << " ]" << endl;
     cout << "set start and virt point: [ " << start_point.x << " , " << start_point.y << " ] --[ " << end_point.x << " , " << end_point.y << " ]" << endl;
+
+
+    int i = 0;
+    vector<struct PathPoint> path_edge_list;
+    struct PathPoint temp;
+    for (i = 1;i < m_x_max;i++)
+    {
+        temp.x = i;temp.y = 0;
+        path_edge_list.push_back(temp);
+    }
+    for (i = 1;i < m_y_max;i++)
+    {
+        temp.x = m_x_max - 1;temp.y = i;
+        path_edge_list.push_back(temp);
+    }
+    for (i = m_x_max - 2;i >= 0;i--)
+    {
+        temp.x = i;temp.y = m_y_max - 1;
+        path_edge_list.push_back(temp);
+    }
+    for (i = m_y_max - 2;i >= 0;i--)
+    {
+        temp.x = 0;temp.y = i;
+        path_edge_list.push_back(temp);
+    }
+
+
+    int p_counts = 2 * (m_x_max + m_y_max) - 4;
+    int end_p_index = 0;
+    for (i = 0;i < path_edge_list.size();i++)
+    {
+        if (path_edge_list[i] == real_end_point)
+        {
+            end_p_index = i;
+            break;
+        }
+    }
+    for (i = 1;i < path_edge_list.size();i++)
+    {
+        if (path_edge_list[(end_p_index + i) % p_counts] == start_point)
+        {
+            path_edge_list_n.push_back(path_edge_list[(end_p_index + i) % p_counts]);
+            break;
+        }
+        else
+        {
+            path_edge_list_n.push_back(path_edge_list[(end_p_index + i) % p_counts]);
+        }
+    }
+    for (i = p_counts - 1;i >= 0;i--)
+    {
+        if (path_edge_list[(end_p_index + i) % p_counts] == start_point)
+        {
+            path_edge_list_r.push_back(path_edge_list[(end_p_index + i) % p_counts]);
+            break;
+        }
+        else
+        {
+            path_edge_list_r.push_back(path_edge_list[(end_p_index + i) % p_counts]);
+        }
+    }
+
 }
 
 void Path::set_steps_range(long step_min, long step_max)
@@ -120,8 +152,10 @@ void Path::rand_main_path()
 {
     int i_i = 1;
     struct PathPoint step_point, cur_point;
-
     bool nearby_end = false;
+    int main_path_steps_counts = 0;
+    long long s_t = GetCurrentTimeInMillis();
+    int re_next_times = 0;
     while (1)
     {
         gen.seed(rd());
@@ -132,21 +166,22 @@ void Path::rand_main_path()
         path_main.push_back(cur_point);
 
         nearby_end = false;
+        path_main_break_points.clear();
+
         while (1)
         {
             step_point = next_point(cur_point);
             if (step_point == cur_point)
             {
                 nearby_end = false;
-                //cout << "this path dead. steps= " << path_main.size()<<endl;
-                break;
+                step_point = re_next_point(cur_point);
+                re_next_times++;
+                //  break;
             }
-
             path_main.push_back(step_point);
             matrix[step_point.y][step_point.x] = 1;
 
             cur_point = step_point;
-
             // check dis with end
             if (abs(cur_point.x - end_point.x) + abs(cur_point.y - end_point.y) <= 3)
             {
@@ -167,32 +202,43 @@ void Path::rand_main_path()
         {
             if (path_main.size() >= steps_r_min && path_main.size() <= steps_r_max)
             {
-                cout << "generate path, steps= " << path_main.size() << endl;
                 break;
             }
             else
             {
-                cout << "generate path not match, steps= " << path_main.size() << "range: " << steps_r_min << " - " << steps_r_max << endl;
                 continue;
             }
         }
 
     }
     add_list_in_path(path_main);
-    show_matrix();
+    reset_matrix_with_main_path();
+    long long d_t = GetCurrentTimeInMillis() - s_t;
+    cout << "generate main path, time= " << d_t << " ms, " << " steps= " << path_main.size() << " backs= " << re_next_times << endl;
 }
+
 
 void Path::rand_dead_path()
 {
+    int rate;
+    long long s_t, c_t;
+    int sum = path_main.size();
+    s_t = GetCurrentTimeInMillis();
+    int rounds = 0;
     while (1)
     {
-        if (get_path_rate_of_matrix() >= dead_path_water)
+        //rate = get_path_rate_of_matrix();
+        rate = sum * 100 / m_x_max / m_y_max;
+        if (rate >= dead_path_water)
         {
             break;
         }
-        rand_dead_path_from_zero_point(dead_path_steps);
+        c_t = GetCurrentTimeInMillis();
+        sum += rand_dead_path_from_zero_point(dead_path_steps);
+        cout << "run once, time= " << GetCurrentTimeInMillis() - c_t << " ms, rate= " << rate << " %" << endl;
+        rounds++;
     }
-    cout << "gen dead path fill end" << endl;
+    cout << "gen dead path fill end, time= " << GetCurrentTimeInMillis() - s_t << " ms, rounds=" << rounds << endl;
     trans_path_base_to_matrix_wall();
 }
 
@@ -227,6 +273,7 @@ struct PathPoint Path::next_point(struct PathPoint point, int mode)
     struct DirectAvaliable temp;
     struct PathPoint next_p;
     temp = check_point_avaliable_direction(point, mode);
+
     int i = 0;
     int dir = 0;
     int temp_c = 0;
@@ -240,8 +287,10 @@ struct PathPoint Path::next_point(struct PathPoint point, int mode)
             temp_c++;
             if (temp_c == dir)
             {
+                temp.selected = 0;
                 next_p.x = point.x - 1;
                 next_p.y = point.y;
+                path_main_selected.push_back(temp);
                 return next_p;
             }
         }
@@ -250,8 +299,10 @@ struct PathPoint Path::next_point(struct PathPoint point, int mode)
             temp_c++;
             if (temp_c == dir)
             {
+                temp.selected = 1;
                 next_p.x = point.x + 1;
                 next_p.y = point.y;
+                path_main_selected.push_back(temp);
                 return next_p;
             }
         }
@@ -260,8 +311,10 @@ struct PathPoint Path::next_point(struct PathPoint point, int mode)
             temp_c++;
             if (temp_c == dir)
             {
+                temp.selected = 2;
                 next_p.x = point.x;
                 next_p.y = point.y - 1;
+                path_main_selected.push_back(temp);
                 return next_p;
             }
         }
@@ -270,11 +323,14 @@ struct PathPoint Path::next_point(struct PathPoint point, int mode)
             temp_c++;
             if (temp_c == dir)
             {
+                temp.selected = 3;
                 next_p.x = point.x;
                 next_p.y = point.y + 1;
+                path_main_selected.push_back(temp);
                 return next_p;
             }
         }
+
         return point;
     }
     else
@@ -393,9 +449,46 @@ struct DirectAvaliable Path::check_point_avaliable_direction(struct PathPoint po
     }
 
     // check dead path
+    struct PathPoint point_main_last;
+    struct PathPoint point_in_main;
     int i = 0;
+    int dir_dead_main_dir = 0;
     if (point_dir.dir_counts == 2)
     {
+        point_main_last = path_main[path_main.size() - 2];
+        // same direct 
+        if (point_dir.x_l == point_dir.x_h)
+        {
+            point_in_main.x = point.x * 2 - point_main_last.x;
+            point_in_main.y = point.y * 2 - point_main_last.y;
+
+            dir_dead_main_dir = get_direct_of_main_list(point_in_main, point_dir.x_l);
+            if (point_dir.x_l == 1)
+            {
+                if (dir_dead_main_dir == -1)
+                {
+                    point_dir.x_l = 0;
+                }
+                else
+                {
+                    point_dir.x_h = 0;
+                }
+                point_dir.dir_counts--;
+            }
+            if (point_dir.y_l == 1)
+            {
+                if (dir_dead_main_dir == -1)
+                {
+                    point_dir.y_l = 0;
+                }
+                else
+                {
+                    point_dir.y_h = 0;
+                }
+                point_dir.dir_counts--;
+            }
+        }
+        /*
         if (point_dir.x_l == 1)
         {
             for (i = 1;i < point.x - 1;i++)
@@ -444,7 +537,9 @@ struct DirectAvaliable Path::check_point_avaliable_direction(struct PathPoint po
                 }
             }
         }
+        */
     }
+
     return point_dir;
 }
 
@@ -492,14 +587,15 @@ int Path::get_path_rate_of_matrix()
     return sum * 100 / m_y_max / m_x_max;
 }
 
-void Path::rand_dead_path_from_zero_point(int steps)
+int Path::rand_dead_path_from_zero_point(int steps)
 {
-    vector<struct PathPoint> point_list, path_list;
+    vector<struct PathPoint> point_list, path_list, dead_start_list;
 
     struct PathPoint temp;
     int i = 0, j = 0;
     bool is_closed_exist = false;
     int dir = 0;
+
     for (i = 1;i < m_y_max - 1;i++)
     {
         for (j = 1;j < m_x_max - 1;j++)
@@ -543,75 +639,75 @@ void Path::rand_dead_path_from_zero_point(int steps)
 
     std::uniform_int_distribution<> dis(0, (int)(point_list.size() - 1));
     temp = point_list[dis(gen)];
-
-    struct PathPoint step_point, cur_point = temp;
-
-    if (matrix[temp.y - 1][temp.x] == 1 && temp.y != 1)
+    dead_start_list.push_back(temp);
+    for (i = 0;i < point_list.size();i++)
     {
-        cur_point.y--;
-    }
-    else
-    {
-        if (matrix[temp.y + 1][temp.x] == 1 && temp.y != m_y_max - 2)
+        for (j = 0;j < dead_start_list.size();j++)
         {
-            cur_point.y++;
+            if (abs(point_list[i].x - dead_start_list[j].x) + abs(point_list[i].y - dead_start_list[j].y) < steps * 2)
+            {
+                break;
+            }
+        }
+        if (j == dead_start_list.size())
+        {
+            dead_start_list.push_back(point_list[i]);
+        }
+    }
+
+    int i_dead_start_list = 0;
+    int sum_d = 0;
+    for (i_dead_start_list = 0;i_dead_start_list < dead_start_list.size();i_dead_start_list++)
+    {
+        temp = dead_start_list[i_dead_start_list];
+        struct PathPoint step_point, cur_point = temp;
+        if (matrix[temp.y - 1][temp.x] == 1 && temp.y != 1)
+        {
+            cur_point.y--;
         }
         else
         {
-            if (matrix[temp.y][temp.x - 1] == 1 && temp.x != 1)
+            if (matrix[temp.y + 1][temp.x] == 1 && temp.y != m_y_max - 2)
             {
-                cur_point.x--;
+                cur_point.y++;
             }
             else
             {
-                if (matrix[temp.y][temp.x + 1] == 1 && temp.x != m_x_max - 2)
+                if (matrix[temp.y][temp.x - 1] == 1 && temp.x != 1)
                 {
-                    cur_point.x++;
+                    cur_point.x--;
+                }
+                else
+                {
+                    if (matrix[temp.y][temp.x + 1] == 1 && temp.x != m_x_max - 2)
+                    {
+                        cur_point.x++;
+                    }
                 }
             }
         }
-    }
-
-    path_list.push_back(cur_point);
-    path_list.push_back(temp);
-    cur_point = temp;
-    matrix[temp.y][temp.x] = 1;
-    for (i = 0; i < steps; i++)
-    {
-        step_point = next_point(cur_point, 1);
-        if (step_point == cur_point)
-        {
-            break;
-        }
-        matrix[step_point.y][step_point.x] = 1;
-        cur_point = step_point;
+        path_list.clear();
         path_list.push_back(cur_point);
-    }
-    add_list_in_path(path_list);
-}
-
-void Path::gen_dead_path_as_point(struct PathPoint point, int steps)
-{
-    vector<struct PathPoint> path_list;
-    struct PathPoint step_point, cur_point;
-    int i = 0;
-    cur_point = point;
-    path_list.push_back(cur_point);
-
-    for (i = 0; i < steps; i++)
-    {
-        step_point = next_point(cur_point, 1);
-        if (step_point == cur_point)
+        path_list.push_back(temp);
+        cur_point = temp;
+        matrix[temp.y][temp.x] = 1;
+        for (i = 0; i < steps; i++)
         {
-            break;
+            step_point = next_point(cur_point, 1);
+            if (step_point == cur_point)
+            {
+                break;
+            }
+            matrix[step_point.y][step_point.x] = 1;
+            cur_point = step_point;
+            path_list.push_back(cur_point);
         }
-        matrix[step_point.y][step_point.x] = 1;
-        cur_point = step_point;
-        path_list.push_back(cur_point);
+        sum_d += path_list.size() - 1;
+        add_list_in_path(path_list);
     }
-    add_list_in_path(path_list);
-}
 
+    return sum_d;
+}
 
 void Path::add_list_in_path(vector<struct PathPoint> path_list)
 {
@@ -683,14 +779,14 @@ void Path::trans_path_base_to_matrix_wall()
 
 void Path::gen_matrix_wall_main_path()
 {
-    cout << " gen matrix wall" << endl;
+    cout << "gen matrix wall" << endl;
     int i = 0, j = 0;
     matrix_wall = (int**)malloc(sizeof(int*) * (m_y_max * 2 - 1));
     for (i = 0;i < (m_y_max * 2 - 1);i++)
     {
         matrix_wall[i] = (int*)malloc(sizeof(int) * (m_x_max * 2 - 1));
     }
-    cout << " initial matrix wall" << endl;
+    cout << "initial matrix wall" << endl;
     for (i = 0;i < (m_y_max * 2 - 1);i++)
     {
         for (j = 0;j < (m_x_max * 2 - 1);j++)
@@ -718,9 +814,9 @@ void Path::gen_matrix_wall_main_path()
             }
         }
     }
-    cout << " initial end matrix wall" << endl;
+    cout << "initial end matrix wall" << endl;
     expand_path_main();
-    cout << " expand end matrix wall" << endl;
+    cout << "expand end matrix wall" << endl;
 }
 
 void Path::expand_path_main()
@@ -781,7 +877,7 @@ void Path::expand_path_list(vector<struct PathPoint> path_list, int number)
     }
 }
 
-void Path::show_gui_image(bool main_path_enable, bool other_path_enable, string fname)
+void Path::show_gui_image(bool show_image, bool main_path_enable, bool other_path_enable, string fname)
 {
 
     cv::Mat image = cv::Mat::zeros((m_y_max * 2 - 1) * rect_width, (m_x_max * 2 - 1) * rect_width, CV_8UC3);
@@ -912,11 +1008,12 @@ void Path::show_gui_image(bool main_path_enable, bool other_path_enable, string 
         }
     }
 
-    cv::imshow("Composite Image", image);
-    // 等待按键按下
-    cv::waitKey(0);
-
-
+    if (show_image)
+    {
+        cv::imshow("Composite Image", image);
+        // 等待按键按下
+        cv::waitKey(0);
+    }
     filename = fname + "_a.png";
     cv::imwrite(filename, image);
 
@@ -1044,8 +1141,202 @@ void Path::set_deep_and_water(int deep, int water)
     dead_path_water = water;
 }
 
-void Path::rand_main_path2()
+bool rand_main_path(struct PathPoint point1, struct PathPoint point2, int min_steps, vector<struct PathPoint>& path_list)
 {
-    vector<struct PathPoint> path_list;
+    return true;
+}
 
+int Path::get_direct_of_main_list(struct PathPoint point, int x)
+{
+    int i = 0;
+    for (i = 0;i < path_edge_list_n.size() - 1;i++)
+    {
+
+        if (point == path_edge_list_n[i])
+        {
+            if (x == 1)
+            {
+                if (path_edge_list_n[i + 1].y == path_edge_list_n[i].y)
+                {
+                    return path_edge_list_n[i + 1].x - path_edge_list_n[i].x;
+                }
+                else
+                {
+                    return path_edge_list_n[i].x - path_edge_list_n[i - 1].x;
+                }
+            }
+            else
+            {
+                if (path_edge_list_n[i + 1].x == path_edge_list_n[i].x)
+                {
+                    return path_edge_list_n[i + 1].y - path_edge_list_n[i].y;
+                }
+                else
+                {
+                    return path_edge_list_n[i].y - path_edge_list_n[i - 1].y;
+                }
+            }
+        }
+    }
+
+    for (i = 0;i < path_edge_list_r.size() - 1;i++)
+    {
+        if (point == path_edge_list_r[i])
+        {
+            if (x == 1)
+            {
+                if (path_edge_list_r[i + 1].y == path_edge_list_r[i].y)
+                {
+                    return path_edge_list_r[i + 1].x - path_edge_list_r[i].x;
+                }
+                else
+                {
+                    return path_edge_list_r[i].x - path_edge_list_r[i - 1].x;
+                }
+            }
+            else
+            {
+                if (path_edge_list_r[i + 1].x == path_edge_list_r[i].x)
+                {
+                    return path_edge_list_r[i + 1].y - path_edge_list_r[i].y;
+                }
+                else
+                {
+                    return path_edge_list_r[i].y - path_edge_list_r[i - 1].y;
+                }
+            }
+        }
+    }
+
+    for (i = 0;i < path_main.size() - 1;i++)
+    {
+        if (point == path_main[i])
+        {
+            if (x == 1)
+            {
+                if (path_main[i + 1].y == path_main[i].y)
+                {
+                    return path_main[i + 1].x - path_main[i].x;
+                }
+                else
+                {
+                    return path_main[i].x - path_main[i - 1].x;
+                }
+            }
+            else
+            {
+                if (path_main[i + 1].x == path_main[i].x)
+                {
+                    return path_main[i + 1].y - path_main[i].y;
+                }
+                else
+                {
+                    return path_main[i].y - path_main[i - 1].y;
+                }
+            }
+
+        }
+    }
+    return 0;
+}
+
+struct PathPoint Path::re_next_point(struct PathPoint point)
+{
+    struct PathPoint temp;
+    //  matrix[point.y][point.x] = 0;
+    temp = path_main.back();
+    path_main.pop_back();
+    // matrix[temp.y][temp.x] = 0;
+
+    int i = path_main_selected.size() - 1;
+    int dir_index = 0;
+    for (;i >= 0;i--)
+    {
+        if (path_main_selected[i].dir_counts >= 2)
+        {
+            dir_index = i;
+            if (path_main_selected[i].selected == 0)
+            {
+                path_main_selected[i].x_l = 0;
+            }
+            if (path_main_selected[i].selected == 1)
+            {
+                path_main_selected[i].x_h = 0;
+            }
+            if (path_main_selected[i].selected == 2)
+            {
+                path_main_selected[i].y_l = 0;
+            }
+            if (path_main_selected[i].selected == 3)
+            {
+                path_main_selected[i].y_h = 0;
+            }
+            path_main_selected[i].dir_counts--;
+            break;
+        }
+        else
+        {
+            path_main_selected.pop_back();
+            temp = path_main.back();
+            path_main.pop_back();
+            //   matrix[temp.y][temp.x]= 0;
+        }
+    }
+
+    temp = path_main[i];
+
+    if (path_main_selected[i].x_l == 1)
+    {
+        temp.x--;
+        path_main_selected[i].selected = 0;
+    }
+    else
+    {
+        if (path_main_selected[i].x_h == 1)
+        {
+            temp.x++;
+            path_main_selected[i].selected = 1;
+        }
+        else
+        {
+            if (path_main_selected[i].y_l == 1)
+            {
+                temp.y--;
+                path_main_selected[i].selected = 2;
+            }
+            else
+            {
+                if (path_main_selected[i].y_h == 1)
+                {
+                    temp.y++;
+                    path_main_selected[i].selected = 3;
+                }
+            }
+
+        }
+
+
+    }
+
+    return temp;
+
+}
+void Path::reset_matrix_with_main_path()
+{
+    reset_matrix_base();
+    int i = 0;
+    for (i = 0;i < path_main.size();i++)
+    {
+        matrix[path_main[i].y][path_main[i].x] = 1;
+    }
+}
+
+long long Path::GetCurrentTimeInMillis()
+{
+    LARGE_INTEGER frequency;
+    LARGE_INTEGER counter;
+    QueryPerformanceFrequency(&frequency);
+    QueryPerformanceCounter(&counter);
+    //return (counter.QuadPart * 1000000LL) / frequency.QuadPart;
+    return (counter.QuadPart * 1000LL) / frequency.QuadPart;
 }

@@ -34,6 +34,20 @@ struct DirectAvaliable {
     int x_h = 1, x_l = 1;
     int y_h = 1, y_l = 1;
     int dir_counts = 4;
+    int selected = 0;
+    DirectAvaliable& operator=(const DirectAvaliable& other)
+    {
+        if (this != &other)
+        {
+            x_h = other.x_h;
+            x_l = other.x_l;
+            y_h = other.y_h;
+            y_l = other.y_l;
+            dir_counts = other.dir_counts;
+            selected = other.selected;
+        }
+        return *this;
+    }
 };
 
 struct BigArea {
@@ -41,10 +55,48 @@ struct BigArea {
     int width;
 };
 
+struct RandPointTag {
+    int index;
+    int left_times = 10;
+};
+
+
 class Path {
 public:
     Path(int x_max, int y_max);
     ~Path();
+
+    void start(int start_x, int start_y, int end_x, int end_y);
+    
+private:
+    // the data without walls
+    int** matrix;
+    // the data with walls
+    int** matrix_wall;
+    // m_x_max is the width, m_y_max is height 
+    int m_x_max = 0, m_y_max = 0;
+    std::random_device rd;
+    std::mt19937 gen;
+    struct PathPoint start_point, end_point, real_end_point;
+    long steps_r_min = 0, steps_r_max = 0;
+    vector<struct PathPoint> path_main;
+    vector<struct DirectAvaliable> path_main_selected;
+    vector<struct PathPoint> path_main_wall;
+    vector<struct PathPoint> path_all_base;
+    vector<struct PathPoint> path_all_wall;
+    vector<struct PathPoint> path_all_wall_expand;
+    //struct BigArea big_area;
+
+    int rect_width = 7;
+    int dead_path_steps = 5;
+    int dead_path_water = 95;
+    int try_steps = 5;
+
+    vector<struct RandPointTag> path_main_break_points;
+    vector<struct PathPoint> path_edge_list_n, path_edge_list_r;
+
+    //long long s_t = GetCurrentTimeInMillis();
+
     /*
     set the start and end point. start with 0.
 
@@ -102,52 +154,22 @@ public:
     - other_path_enable : show all path with color-blue.
     - fname             : save the picture as fname-q.png for question,and fname-a.png for answer.
     */
-    void show_gui_image(bool main_path_enable = false, bool other_path_enable = false, string fname = "m1");
+    void show_gui_image(bool show_image = true, bool main_path_enable = false, bool other_path_enable = false, string fname = "m1");
 
-    /*
-    show base matrix.
-    it print the result in console,so it maybe can not show line in a console line.
-    */
-    void show_matrix(int mode = 0);
-
-    /*
-    show matrix with some wall.
-    - it print the result in console,so it maybe can not show line in a console line.
-    - the data maybe other values
-    */
-    void show_matrix_wall();
-
-    void rand_main_path2();
-private:
-    // the data without walls
-    int** matrix;
-    // the data with walls
-    int** matrix_wall;
-    // m_x_max is the width, m_y_max is height 
-    int m_x_max = 0, m_y_max = 0;
-    std::random_device rd;
-    std::mt19937 gen;
-    struct PathPoint start_point, end_point, real_end_point;
-    long steps_r_min = 0, steps_r_max = 0;
-    vector<struct PathPoint> path_main;
-    vector<struct PathPoint> path_main_wall;
-    vector<struct PathPoint> path_all_base;
-    vector<struct PathPoint> path_all_wall;
-    vector<struct PathPoint> path_all_wall_expand;
-    struct BigArea big_area;
-
-    int rect_width = 7;
-    int dead_path_steps = 5;
-    int dead_path_water = 95;
 
     /*
     reset the matrix withou walls
     */
     void reset_matrix_base();
     /*
+    */
+    void reset_matrix_with_main_path();
+
+    /*
     rand,get next point
     */
     struct PathPoint next_point(struct PathPoint point, int mode = 0);
+    struct PathPoint re_next_point(struct PathPoint point);
     /*
     check current point's avaliable next point.
     - point : current point
@@ -168,14 +190,16 @@ private:
     */
     int get_no_zero_point_counts();
     /*
-    generate child path start as point, 
+    generate child path start as point,
     */
-    void gen_dead_path_as_point(struct PathPoint point, int steps);
-    void rand_dead_path_from_zero_point(int steps);
+    //void gen_dead_path_as_point(struct PathPoint point, int steps);
+    int rand_dead_path_from_zero_point(int steps);
     void expand_path_main();
     void expand_path_list(vector<struct PathPoint> path_list, int number = 2);
     void add_list_in_path(vector<struct PathPoint> path_list);
     void expand_path_list_to_wall();
     void trans_path_base_to_matrix_wall();
-
+    int get_direct_of_main_list(struct PathPoint point, int x);
+    long long GetCurrentTimeInMillis();
 };
+
