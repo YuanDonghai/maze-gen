@@ -26,7 +26,7 @@ Path::Path(int x_max, int y_max)
     m_x_max = x_max;
     m_y_max = y_max;
     steps_r_min = 2 * (m_x_max + m_y_max);
-    steps_r_max = m_x_max * m_y_max ;
+    steps_r_max = m_x_max * m_y_max / 4;
     gen.seed(rd());
     cout << "initial matrix: width= " << m_x_max << " height= " << m_y_max << endl;
 }
@@ -39,7 +39,7 @@ Path::~Path()
 void Path::start(int start_x, int start_y, int end_x, int end_y)
 {
     set_start_end_point(start_x, start_y, end_x, end_y);
-    //set_steps_range(60, 100000);
+    //set_steps_range(60, 100);
     set_show_gui(600, 400);
 
     rand_main_path();
@@ -50,8 +50,10 @@ void Path::start(int start_x, int start_y, int end_x, int end_y)
     matrix_wall_edge_zero();
     matrix_wall_merge_area();
 
+    long long s_t = GetCurrentTimeInMillis();
+    show_gui_image_line(false, true, true);
+    cout << "gui time: " << GetCurrentTimeInMillis() - s_t << endl;
 
-    show_gui_image(false, true, true);
 }
 
 void Path::set_start_end_point(int start_x, int start_y, int end_x, int end_y)
@@ -156,6 +158,8 @@ void Path::rand_main_path()
     int main_path_steps_counts = 0;
     long long s_t = GetCurrentTimeInMillis();
     int re_next_times = 0;
+
+    int short_dis = abs(start_point.x - end_point.x) + abs(start_point.y - end_point.y);
     while (1)
     {
         gen.seed(rd());
@@ -167,6 +171,7 @@ void Path::rand_main_path()
 
         nearby_end = false;
         path_main_break_points.clear();
+        path_main_selected.clear();
 
         while (1)
         {
@@ -176,6 +181,7 @@ void Path::rand_main_path()
                 nearby_end = false;
                 step_point = re_next_point(cur_point);
                 re_next_times++;
+                cout << "\r[" << 100 - (abs(cur_point.x - end_point.x) + abs(cur_point.y - end_point.y)) * 100 / short_dis << "]";
                 //  break;
             }
             path_main.push_back(step_point);
@@ -189,6 +195,11 @@ void Path::rand_main_path()
                 {
                     nearby_end = true;
                     link_2_points_main_path(cur_point, end_point);
+                    break;
+                }
+                else
+                {
+                    nearby_end = true;
                     break;
                 }
                 if (cur_point == end_point)
@@ -214,7 +225,7 @@ void Path::rand_main_path()
     add_list_in_path(path_main);
     reset_matrix_with_main_path();
     long long d_t = GetCurrentTimeInMillis() - s_t;
-    cout << "generate main path, time= " << d_t << " ms, " << " steps= " << path_main.size() << " backs= " << re_next_times << endl;
+    cout << "\r" << "generate main path, time= " << d_t << " ms, " << " steps= " << path_main.size() << " backs= " << re_next_times << endl;
 }
 
 
@@ -225,6 +236,8 @@ void Path::rand_dead_path()
     int sum = path_main.size();
     s_t = GetCurrentTimeInMillis();
     int rounds = 0;
+    int res_c = 0;
+    cout << "generating the path:" << endl;
     while (1)
     {
         //rate = get_path_rate_of_matrix();
@@ -234,11 +247,18 @@ void Path::rand_dead_path()
             break;
         }
         c_t = GetCurrentTimeInMillis();
-        sum += rand_dead_path_from_zero_point(dead_path_steps);
-        cout << "run once, time= " << GetCurrentTimeInMillis() - c_t << " ms, rate= " << rate << " %" << endl;
+        res_c = rand_dead_path_from_zero_point_f(dead_path_steps);
+        //res_c = rand_dead_path_from_zero_point_m(dead_path_steps);
+        if (res_c == 0)
+        {
+            break;
+        }
+        sum += res_c;
+        //cout << "generating the path , time= " << GetCurrentTimeInMillis() - c_t << " ms, rate= " << rate << " %" << endl;
+        cout << "\r[" << rate << "]";
         rounds++;
     }
-    cout << "gen dead path fill end, time= " << GetCurrentTimeInMillis() - s_t << " ms, rounds=" << rounds << endl;
+    cout << "\r" << "gen dead path fill end, time= " << GetCurrentTimeInMillis() - s_t << " ms, rounds=" << rounds << endl;
     trans_path_base_to_matrix_wall();
 }
 
@@ -590,12 +610,12 @@ int Path::get_path_rate_of_matrix()
 int Path::rand_dead_path_from_zero_point(int steps)
 {
     vector<struct PathPoint> point_list, path_list, dead_start_list;
-
     struct PathPoint temp;
     int i = 0, j = 0;
     bool is_closed_exist = false;
     int dir = 0;
-
+    //long long s_t;
+    //s_t = GetCurrentTimeInMillis();
     for (i = 1;i < m_y_max - 1;i++)
     {
         for (j = 1;j < m_x_max - 1;j++)
@@ -636,10 +656,15 @@ int Path::rand_dead_path_from_zero_point(int steps)
             }
         }
     }
-
+    //cout << " search all start list: " << GetCurrentTimeInMillis() - s_t << " " << point_list.size()<<endl;
+    if (point_list.size() == 0)
+    {
+        return 0;
+    }
     std::uniform_int_distribution<> dis(0, (int)(point_list.size() - 1));
     temp = point_list[dis(gen)];
     dead_start_list.push_back(temp);
+    //s_t = GetCurrentTimeInMillis();
     for (i = 0;i < point_list.size();i++)
     {
         for (j = 0;j < dead_start_list.size();j++)
@@ -653,10 +678,12 @@ int Path::rand_dead_path_from_zero_point(int steps)
         {
             dead_start_list.push_back(point_list[i]);
         }
-    }
 
+    }
+    //cout << " search dead start list: " << GetCurrentTimeInMillis() - s_t << endl;
     int i_dead_start_list = 0;
     int sum_d = 0;
+    //s_t = GetCurrentTimeInMillis();
     for (i_dead_start_list = 0;i_dead_start_list < dead_start_list.size();i_dead_start_list++)
     {
         temp = dead_start_list[i_dead_start_list];
@@ -706,6 +733,222 @@ int Path::rand_dead_path_from_zero_point(int steps)
         add_list_in_path(path_list);
     }
 
+    //cout << " run dead start list: " << GetCurrentTimeInMillis() - s_t << "  " << dead_start_list.size()<< endl<<endl;
+    return sum_d;
+}
+
+int Path::rand_dead_path_from_zero_point_f(int steps)
+{
+    vector<struct PathPoint> point_list, path_list, dead_start_list;
+    struct PathPoint temp;
+    int i = 0, j = 0;
+    bool is_closed_exist = false;
+    int dir = 0;
+    //long long s_t;
+    //s_t = GetCurrentTimeInMillis();
+    for (i = 1;i < m_y_max - 1;i++)
+    {
+        for (j = 1;j < m_x_max - 1;j++)
+        {
+            if (matrix[i][j] == 0)
+            {
+                is_closed_exist = false;
+                if (matrix[i - 1][j] == 1 && i != 1)
+                {
+                    is_closed_exist = true;
+                }
+                else
+                {
+                    if (matrix[i + 1][j] == 1 && i != m_y_max - 2)
+                    {
+                        is_closed_exist = true;
+                    }
+                    else
+                    {
+                        if (matrix[i][j - 1] == 1 && j != 1)
+                        {
+                            is_closed_exist = true;
+                        }
+                        else
+                        {
+                            if (matrix[i][j + 1] == 1 && j != m_x_max - 2)
+                            {
+                                is_closed_exist = true;
+                            }
+                        }
+                    }
+                }
+                if (is_closed_exist)
+                {
+                    temp.x = j;temp.y = i;
+                    point_list.push_back(temp);
+                }
+            }
+        }
+    }
+    //cout << " search all start list: " << GetCurrentTimeInMillis() - s_t << " " << point_list.size() << endl;
+    if (point_list.size() == 0)
+    {
+        return 0;
+    }
+    std::uniform_int_distribution<> dis(0, 10);
+
+    //s_t = GetCurrentTimeInMillis();
+    for (i = dis(gen);i < point_list.size();i++)
+    {
+        dead_start_list.push_back(point_list[i]);
+        i = i + 9;
+    }
+    //cout << " search dead start list: " << GetCurrentTimeInMillis() - s_t << endl;
+    int i_dead_start_list = 0;
+    int sum_d = 0;
+    //s_t = GetCurrentTimeInMillis();
+    for (i_dead_start_list = 0;i_dead_start_list < dead_start_list.size();i_dead_start_list++)
+    {
+        temp = dead_start_list[i_dead_start_list];
+        struct PathPoint step_point, cur_point = temp;
+        if (matrix[temp.y - 1][temp.x] == 1 && temp.y != 1)
+        {
+            cur_point.y--;
+        }
+        else
+        {
+            if (matrix[temp.y + 1][temp.x] == 1 && temp.y != m_y_max - 2)
+            {
+                cur_point.y++;
+            }
+            else
+            {
+                if (matrix[temp.y][temp.x - 1] == 1 && temp.x != 1)
+                {
+                    cur_point.x--;
+                }
+                else
+                {
+                    if (matrix[temp.y][temp.x + 1] == 1 && temp.x != m_x_max - 2)
+                    {
+                        cur_point.x++;
+                    }
+                }
+            }
+        }
+        path_list.clear();
+        path_list.push_back(cur_point);
+        path_list.push_back(temp);
+        cur_point = temp;
+        matrix[temp.y][temp.x] = 1;
+        for (i = 0; i < steps; i++)
+        {
+            step_point = next_point(cur_point, 1);
+            if (step_point == cur_point)
+            {
+                break;
+            }
+            matrix[step_point.y][step_point.x] = 1;
+            cur_point = step_point;
+            path_list.push_back(cur_point);
+        }
+        sum_d += path_list.size() - 1;
+        add_list_in_path(path_list);
+    }
+
+    //cout << " run dead start list: " << GetCurrentTimeInMillis() - s_t << "  " << dead_start_list.size() << endl << endl;
+    return sum_d;
+}
+
+int Path::rand_dead_path_from_zero_point_m(int steps)
+{
+    vector<struct PathPoint> point_list, path_list, dead_start_list;
+
+    struct PathPoint temp;
+    int i = 0, j = 0;
+    bool is_closed_exist = false;
+    int dir = 0;
+
+    for (i = 1;i < m_y_max - 1;i++)
+    {
+        for (j = 1;j < m_x_max - 1;j++)
+        {
+            if (matrix[i][j] == 0)
+            {
+                is_closed_exist = false;
+                if (matrix[i - 1][j] == 1 && i != 1)
+                {
+                    is_closed_exist = true;
+                }
+                else
+                {
+                    if (matrix[i + 1][j] == 1 && i != m_y_max - 2)
+                    {
+                        is_closed_exist = true;
+                    }
+                    else
+                    {
+                        if (matrix[i][j - 1] == 1 && j != 1)
+                        {
+                            is_closed_exist = true;
+                        }
+                        else
+                        {
+                            if (matrix[i][j + 1] == 1 && j != m_x_max - 2)
+                            {
+                                is_closed_exist = true;
+                            }
+                        }
+                    }
+                }
+                if (is_closed_exist)
+                {
+                    temp.x = j;temp.y = i;
+                    point_list.push_back(temp);
+                }
+            }
+        }
+    }
+    if (point_list.size() == 0)
+    {
+        return 0;
+    }
+    std::uniform_int_distribution<> dis(0, (int)(point_list.size() - 1));
+    temp = point_list[dis(gen)];
+    dead_start_list.push_back(temp);
+    for (i = 0;i < point_list.size();i++)
+    {
+        for (j = 0;j < dead_start_list.size();j++)
+        {
+            if (abs(point_list[i].x - dead_start_list[j].x) + abs(point_list[i].y - dead_start_list[j].y) < steps * 2)
+            {
+                break;
+            }
+        }
+        if (j == dead_start_list.size())
+        {
+            dead_start_list.push_back(point_list[i]);
+        }
+    }
+
+    int i_dead_start_list = 0;
+    int sum_d = 0;
+    struct PthreadS th_s[MULTHREAD];
+    for (i_dead_start_list = 0;i_dead_start_list < dead_start_list.size() / MULTHREAD;i_dead_start_list += MULTHREAD)
+    {
+        for (i = 0;i < MULTHREAD;i++)
+        {
+            temp = dead_start_list[i_dead_start_list * MULTHREAD + i];
+            th_s[i].point = temp;
+            th_s[i].index = i;
+            dead_path_threads[i] = std::thread(&Path::dead_thread, this, &th_s[i]);
+        }
+        for (i = 0;i < MULTHREAD;i++)
+        {
+            dead_path_threads[i].join();
+        }
+        for (i = 0;i < MULTHREAD;i++)
+        {
+            //cout << i << " " << th_s[i].res<<endl;
+            sum_d += th_s[i].res;
+        }
+    }
     return sum_d;
 }
 
@@ -891,6 +1134,8 @@ void Path::show_gui_image(bool show_image, bool main_path_enable, bool other_pat
     cv::Scalar lineColorR(0, 0, 255);
     cv::Scalar lineColorD(255, 255, 0);
 
+
+
     int thickness = 1;
 
     int i = 0, j = 0;
@@ -994,6 +1239,195 @@ void Path::show_gui_image(bool show_image, bool main_path_enable, bool other_pat
             }
         }
     }
+    if (main_path_enable)
+    {
+        cv::Point main_p1, main_p2;
+        main_p1.x = path_main_wall[0].x * rect_width;
+        main_p1.y = path_main_wall[0].y * rect_width;
+        for (i = 1;i < path_main_wall.size();i++)
+        {
+            main_p2.x = path_main_wall[i].x * rect_width;
+            main_p2.y = path_main_wall[i].y * rect_width;
+            cv::line(image, main_p1, main_p2, lineColorR, thickness);
+            main_p1 = main_p2;
+        }
+    }
+
+    if (show_image)
+    {
+        cv::imshow("Composite Image", image);
+        // 等待按键按下
+        cv::waitKey(0);
+    }
+    filename = fname + "_a.png";
+    cv::imwrite(filename, image);
+
+}
+
+void Path::show_gui_image_line(bool show_image, bool main_path_enable, bool other_path_enable, string fname)
+{
+
+    cv::Mat image = cv::Mat::zeros((m_y_max * 2 - 1) * rect_width, (m_x_max * 2 - 1) * rect_width, CV_8UC3);
+    image.setTo(cv::Scalar(255, 255, 255));
+
+    cv::Mat rect = cv::Mat::zeros(rect_width, rect_width, CV_8UC3);
+    rect.setTo(cv::Scalar(255, 255, 255));
+
+    cv::Scalar lineColorW(0, 0, 0);
+    cv::Scalar emptyColor(255, 255, 255);
+    cv::Scalar lineColorR(0, 0, 255);
+    cv::Scalar lineColorD(255, 255, 0);
+
+
+
+    int thickness = 1;
+
+    int i = 0, j = 0;
+    int rate_run = 0;
+    cout << "generate question image" << endl;
+    for (i = 1;i < (m_y_max * 2 - 2);i++)
+    {
+        for (j = 1;j < (m_x_max * 2 - 2);j++)
+        {
+            if (matrix_wall[i][j] == 0)
+            {
+                // left
+                if (j > 0)
+                {
+                    if (matrix_wall[i][j - 1] == 0)
+                    {
+                        cv::line(image, cv::Point(j * rect_width, i * rect_width + rect_width / 2), cv::Point(j * rect_width + rect_width / 2, i * rect_width + rect_width / 2), lineColorW, thickness);
+                    }
+                }
+                // right
+                if (j < (m_x_max * 2 - 2))
+                {
+                    if (matrix_wall[i][j + 1] == 0)
+                    {
+                        cv::line(image, cv::Point(j * rect_width + rect_width / 2, i * rect_width + rect_width / 2), cv::Point(j * rect_width + rect_width, i * rect_width + rect_width / 2), lineColorW, thickness);
+                    }
+                }
+                // top
+                if (i > 0)
+                {
+                    if (matrix_wall[i - 1][j] == 0)
+                    {
+                        cv::line(image, cv::Point(j * rect_width + rect_width / 2, i * rect_width), cv::Point(j * rect_width + rect_width / 2, i * rect_width + rect_width / 2), lineColorW, thickness);
+                    }
+                }
+                // bot
+                if (i < m_y_max * 2 - 2)
+                {
+                    if (matrix_wall[i + 1][j] == 0)
+                    {
+                        cv::line(image, cv::Point(j * rect_width + rect_width / 2, i * rect_width + rect_width), cv::Point(j * rect_width + rect_width / 2, i * rect_width + rect_width / 2), lineColorW, thickness);
+                    }
+                }
+            }
+        }
+        cout << "\r[" << i * 50 / m_y_max << "]";
+    }
+    string filename = fname + "_q.png";
+    cv::imwrite(filename, image);
+    cout << "\r" << "generate answer image" << endl;
+    if (other_path_enable)
+    {
+        for (i = 1;i < (m_y_max * 2 - 2);i++)
+        {
+            for (j = 1;j < (m_x_max * 2 - 2);j++)
+            {
+                if (matrix_wall[i][j] == 3)
+                {
+                    // left
+                    if (j > 0)
+                    {
+                        if (matrix_wall[i][j - 1] == 3)
+                        {
+                            cv::line(image, cv::Point(j * rect_width, i * rect_width + rect_width / 2), cv::Point(j * rect_width + rect_width / 2, i * rect_width + rect_width / 2), lineColorD, thickness);
+                        }
+                    }
+                    // right
+                    if (j < (m_x_max * 2 - 2))
+                    {
+                        if (matrix_wall[i][j + 1] == 3)
+                        {
+                            cv::line(image, cv::Point(j * rect_width + rect_width / 2, i * rect_width + rect_width / 2), cv::Point(j * rect_width + rect_width, i * rect_width + rect_width / 2), lineColorD, thickness);
+                        }
+                    }
+                    // top
+                    if (i > 0)
+                    {
+                        if (matrix_wall[i - 1][j] == 3)
+                        {
+                            cv::line(image, cv::Point(j * rect_width + rect_width / 2, i * rect_width), cv::Point(j * rect_width + rect_width / 2, i * rect_width + rect_width / 2), lineColorD, thickness);
+                        }
+                    }
+                    // bot
+                    if (i < m_y_max * 2 - 2)
+                    {
+                        if (matrix_wall[i + 1][j] == 3)
+                        {
+                            cv::line(image, cv::Point(j * rect_width + rect_width / 2, i * rect_width + rect_width), cv::Point(j * rect_width + rect_width / 2, i * rect_width + rect_width / 2), lineColorD, thickness);
+                        }
+                    }
+                }
+            }
+            cout << "\r[" << i * 50 / m_y_max << "]";
+        }
+    }
+    cout << "\r";
+    if (main_path_enable)
+    {
+        cv::Point main_p1, main_p2;
+        main_p1.x = path_main_wall[0].x * rect_width;
+        main_p1.y = path_main_wall[0].y * rect_width;
+        for (i = 1;i < path_main_wall.size();i++)
+        {
+            main_p2.x = path_main_wall[i].x * rect_width;
+            main_p2.y = path_main_wall[i].y * rect_width;
+            cv::line(image, main_p1, main_p2, lineColorR, thickness);
+            main_p1 = main_p2;
+        }
+    }
+
+    if (show_image)
+    {
+        cv::imshow("Composite Image", image);
+        // 等待按键按下
+        cv::waitKey(0);
+    }
+    filename = fname + "_a.png";
+    cv::imwrite(filename, image);
+
+}
+
+void Path::show_gui_image_fast(bool show_image, bool main_path_enable, bool other_path_enable, string fname)
+{
+    initial_rect_style();
+    cv::Mat image = cv::Mat::zeros((m_y_max * 2 - 1) * rect_width, (m_x_max * 2 - 1) * rect_width, CV_8UC3);
+    image.setTo(cv::Scalar(255, 255, 255));
+    cv::Scalar lineColorW(0, 0, 0);
+    cv::Scalar emptyColor(255, 255, 255);
+    cv::Scalar lineColorR(0, 0, 255);
+    cv::Scalar lineColorD(255, 255, 0);
+    int thickness = 1;
+    int i = 0, j = 0;
+    int i_index = 0;
+    for (i = 1;i < (m_y_max * 2 - 2);i++)
+    {
+        for (j = 1;j < (m_x_max * 2 - 2);j++)
+        {
+            cv::Rect roi((j * rect_width), (i * rect_width), rect_width, rect_width);
+            i_index = get_rect_index(j, i);
+            if (i_index >= 0)
+            {
+                rect_list[i_index].copyTo(image(roi));
+            }
+        }
+    }
+    string filename = fname + "_q.png";
+    cv::imwrite(filename, image);
+
     if (main_path_enable)
     {
         cv::Point main_p1, main_p2;
@@ -1339,4 +1773,195 @@ long long Path::GetCurrentTimeInMillis()
     QueryPerformanceCounter(&counter);
     //return (counter.QuadPart * 1000000LL) / frequency.QuadPart;
     return (counter.QuadPart * 1000LL) / frequency.QuadPart;
+}
+
+void Path::initial_rect_style()
+{
+    // 4 direct,number 1111 left right top down
+    // 3 colors,wall main dead
+    // 8 types,  use number 11111 to all types
+
+    int thickness = 1;
+
+    cv::Scalar lineColorW(0, 0, 0);
+    cv::Scalar lineColorD(255, 255, 0);
+
+    cv::Scalar lineColorU;
+    int i_type, i_left, i_right, i_top, i_bot;
+    int i_index = 0;
+    int i = 0;
+    for (i_type = 0;i_type < 4;i_type++)
+    {
+        if (i_type == 0)
+        {
+            lineColorU = lineColorW;
+        }
+        if (i_type == 3)
+        {
+            lineColorU = lineColorD;
+        }
+
+        for (i_left = 0;i_left < 2;i_left++)
+        {
+            for (i_right = 0;i_right < 2;i_right++)
+            {
+                for (i_top = 0;i_top < 2;i_top++)
+                {
+                    for (i_bot = 0;i_bot < 2;i_bot++)
+                    {
+                        rect_list[i] = cv::Mat::zeros(rect_width, rect_width, CV_8UC3);
+                        rect_list[i].setTo(cv::Scalar(255, 255, 255));
+                        if (i_left == 1)
+                        {
+                            cv::line(rect_list[i], cv::Point(0, rect_width / 2), cv::Point(rect_width / 2, rect_width / 2), lineColorU, thickness);
+                        }
+                        if (i_right == 1)
+                        {
+                            cv::line(rect_list[i], cv::Point(rect_width / 2, rect_width / 2), cv::Point(rect_width, rect_width / 2), lineColorU, thickness);
+                        }
+                        if (i_top == 1)
+                        {
+                            cv::line(rect_list[i], cv::Point(rect_width / 2, 0), cv::Point(rect_width / 2, rect_width / 2), lineColorU, thickness);
+                        }
+                        if (i_bot == 1)
+                        {
+                            cv::line(rect_list[i], cv::Point(rect_width / 2, rect_width), cv::Point(rect_width / 2, rect_width / 2), lineColorU, thickness);
+                        }
+                        i_index = i_type * 10000 + i_left * 1000 + i_right * 100 + i_top * 10 + i_bot;
+                        i++;
+                        //  cv::imshow("rect Image", rect);
+                        //  // 等待按键按下
+                       //   cv::waitKey(0);
+                       //   rect_list.push_back(rect);
+                        rect_index.push_back(i_index);
+                    }
+                }
+            }
+        }
+    }
+    //int i = 0;
+    for (i = 0;i < 64;i++)
+    {
+        // cv::imshow("rect Image", rect_list[i]);
+         //  // 等待按键按下
+       //   cv::waitKey(0);
+    }
+}
+int Path::get_rect_index(int x, int y)
+{
+    struct PathPoint temp;
+    temp.x = x;
+    temp.y = y;
+    return get_rect_index(temp);
+}
+int Path::get_rect_index(struct PathPoint point)
+{
+    int i = point.y;
+    int j = point.x;
+    int rect_type_number = 0;
+
+    rect_type_number += matrix_wall[i][j] * 10000;
+    int cmp_value = matrix_wall[i][j];
+    //left
+    if (j > 0)
+    {
+        if (matrix_wall[i][j - 1] == cmp_value)
+        {
+            rect_type_number += 1000;
+        }
+    }
+    // right
+    if (j < (m_x_max * 2 - 2))
+    {
+        if (matrix_wall[i][j + 1] == cmp_value)
+        {
+            rect_type_number += 100;
+        }
+    }
+    // top
+    if (i > 0)
+    {
+        if (matrix_wall[i - 1][j] == cmp_value)
+        {
+            rect_type_number += 10;
+        }
+    }
+    // bot
+    if (i < m_y_max * 2 - 2)
+    {
+        if (matrix_wall[i + 1][j] == cmp_value)
+        {
+            rect_type_number += 1;
+        }
+    }
+    if (rect_type_number == 0)
+    {
+        return -1;
+    }
+    int k = 0;
+    for (k = 0;k < rect_index.size();k++)
+    {
+        if (rect_index[k] == rect_type_number)
+        {
+            return k;
+        }
+    }
+
+    return 0;
+}
+
+void Path::dead_thread(void* th_p)
+{
+    struct PthreadS* p_th = (struct PthreadS*)(th_p);
+    struct PathPoint point = p_th->point;
+    int index = p_th->index;
+    int i;
+    vector<struct PathPoint> path_list;
+    struct PathPoint step_point, cur_point = point;
+    if (matrix[point.y - 1][point.x] == 1 && point.y != 1)
+    {
+        cur_point.y--;
+    }
+    else
+    {
+        if (matrix[point.y + 1][point.x] == 1 && point.y != m_y_max - 2)
+        {
+            cur_point.y++;
+        }
+        else
+        {
+            if (matrix[point.y][point.x - 1] == 1 && point.x != 1)
+            {
+                cur_point.x--;
+            }
+            else
+            {
+                if (matrix[point.y][point.x + 1] == 1 && point.x != m_x_max - 2)
+                {
+                    cur_point.x++;
+                }
+            }
+        }
+    }
+    path_list.clear();
+    path_list.push_back(cur_point);
+    path_list.push_back(point);
+    cur_point = point;
+    matrix[point.y][point.x] = 1;
+    for (i = 0; i < dead_path_steps; i++)
+    {
+        step_point = next_point(cur_point, 1);
+        if (step_point == cur_point)
+        {
+            break;
+        }
+        matrix[step_point.y][step_point.x] = 1;
+        cur_point = step_point;
+        path_list.push_back(cur_point);
+    }
+    //sum_d += path_list.size() - 1;
+    //dead_path_threads_res[index] = path_list.size() - 1;
+    p_th->res = path_list.size() - 1;
+    add_list_in_path(path_list);
+
 }

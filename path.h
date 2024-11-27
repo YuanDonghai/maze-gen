@@ -3,11 +3,14 @@
 #include <random>
 #include <vector>
 #include <windows.h>
+#include <thread>
 
 
 #include <opencv2/opencv.hpp>
 
 using namespace std;
+
+#define MULTHREAD 8 // 4*2
 
 struct PathPoint {
     int x;
@@ -60,6 +63,11 @@ struct RandPointTag {
     int left_times = 10;
 };
 
+struct PthreadS {
+    struct PathPoint point;
+    int index = 0;
+    int res = 0;
+};
 
 class Path {
 public:
@@ -67,7 +75,7 @@ public:
     ~Path();
 
     void start(int start_x, int start_y, int end_x, int end_y);
-    
+
 private:
     // the data without walls
     int** matrix;
@@ -95,6 +103,14 @@ private:
     vector<struct RandPointTag> path_main_break_points;
     vector<struct PathPoint> path_edge_list_n, path_edge_list_r;
 
+    cv::Mat rect_list[64];
+    vector<int> rect_index;
+
+    std::thread dead_path_threads[MULTHREAD];
+    int dead_path_threads_res[MULTHREAD];
+
+
+    cv::Mat save_image[MULTHREAD];
     //long long s_t = GetCurrentTimeInMillis();
 
     /*
@@ -155,8 +171,8 @@ private:
     - fname             : save the picture as fname-q.png for question,and fname-a.png for answer.
     */
     void show_gui_image(bool show_image = true, bool main_path_enable = false, bool other_path_enable = false, string fname = "m1");
-
-
+    void show_gui_image_fast(bool show_image = true, bool main_path_enable = false, bool other_path_enable = false, string fname = "m1");
+    void show_gui_image_line(bool show_image = true, bool main_path_enable = false, bool other_path_enable = false, string fname = "m1");
     /*
     reset the matrix withou walls
     */
@@ -194,6 +210,8 @@ private:
     */
     //void gen_dead_path_as_point(struct PathPoint point, int steps);
     int rand_dead_path_from_zero_point(int steps);
+    int rand_dead_path_from_zero_point_f(int steps);
+    int rand_dead_path_from_zero_point_m(int steps);
     void expand_path_main();
     void expand_path_list(vector<struct PathPoint> path_list, int number = 2);
     void add_list_in_path(vector<struct PathPoint> path_list);
@@ -201,5 +219,11 @@ private:
     void trans_path_base_to_matrix_wall();
     int get_direct_of_main_list(struct PathPoint point, int x);
     long long GetCurrentTimeInMillis();
+
+    void initial_rect_style();
+    int get_rect_index(struct PathPoint point);
+    int get_rect_index(int x, int y);
+
+    void dead_thread(void* th_p);
 };
 
